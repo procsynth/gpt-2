@@ -70,11 +70,18 @@ def interact_model(
         saver.restore(sess, ckpt)
 
         while True:
-            raw_text = input("Model prompt >>> ")
-            while not raw_text:
-                print('Prompt should not be empty!')
-                raw_text = input("Model prompt >>> ")
+            print("Enter/Paste your content. Ctrl-D or Ctrl-Z ( windows ) to save it.")
+            contents = []
+            while True:
+                try:
+                    line = input()
+                except Exception:
+                    break
+            contents.append(line)
+            raw_text = "".join(contents)
+            print("========= GOT IT ==========")
             context_tokens = enc.encode(raw_text)
+            print("len context tokens:", len(context_tokens))
             generated = 0
             for _ in range(nsamples // batch_size):
                 out = sess.run(output, feed_dict={
