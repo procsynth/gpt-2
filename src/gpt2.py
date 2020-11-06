@@ -23,7 +23,6 @@ from threading import Thread
 import queue 
 
 
-
 class GPT2():
     """GTP-2 helper"""
     def __init__(
@@ -50,9 +49,13 @@ class GPT2():
             raise ValueError("Can't get samples longer than window size: %s" % self.hparams.n_ctx)
 
         self.tasks = queue.Queue()
-
         self.model_thread = Thread(target=self.run)
         self.model_thread.start()
+
+    def stop(self):
+        self.running = False
+        self.generate('dummmy', print)
+        print("TF stopping...")
 
 
     def run(self):
@@ -60,6 +63,8 @@ class GPT2():
         tf.reset_default_graph()
 
         enc = self.get_encoder()
+
+        self.running = True
 
         with tf.Session(graph=tf.Graph()) as sess:
 
@@ -80,9 +85,16 @@ class GPT2():
             ckpt = tf.train.latest_checkpoint(os.path.join(self.models_dir, self.model_name))
             saver.restore(sess, ckpt)
 
-            while True:
-    
-                task = self.tasks.get(True)
+            while self.running:
+
+                try:
+                    task = self.tasks.get(True)
+                except Exception as e:
+                    self.running = False
+                    break
+
+                if not self.running:
+                    break
 
                 print("TF processing task", task["run_id"])
 
@@ -95,6 +107,13 @@ class GPT2():
 
                 context_tokens = enc.encode(task['raw_text'])
 
+                print("TF len context:", len(context_tokens))
+
+                print("PROMPT:")
+                print(task['raw_text'])
+
+                print('=' * 10)
+
                 out = sess.run(output, feed_dict={
                     context: [context_tokens]
                 })[:, len(context_tokens):]
@@ -103,6 +122,9 @@ class GPT2():
 
                 task['callback'](text, task)
 
+            print("TF closing")
+
+        print("TF stopped")
 
 
     def get_encoder(self):
@@ -115,8 +137,6 @@ class GPT2():
             encoder=encoder,
             bpe_merges=bpe_merges,
         )
-
-
 
 
     def generate(self, raw_text, callback, run_id=None, nsamples=1, temperature=1, top_k=0, top_p=1):
